@@ -22,6 +22,10 @@
   .refresh{border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;
     padding:6px 12px;border-radius:18px;}
   .updated{font-size:11px;color:var(--sub);margin:0 2px 8px;}
+  .tabs{display:flex;gap:6px;margin:0 0 10px;}
+  .tab{flex:1;text-align:center;font-size:14px;font-weight:700;padding:8px 4px;border-radius:10px;
+    background:var(--card);border:1px solid var(--line);color:var(--sub);}
+  .tab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
   .summary{display:flex;gap:6px;margin:0 0 10px;}
   .chip{flex:1;text-align:center;border-radius:10px;padding:6px 4px;}
   .chip .n{font-size:20px;font-weight:700;display:inline;margin-right:4px;}
@@ -41,7 +45,7 @@
   .ev{font-size:13px;color:var(--sub);max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .meet{font-size:12px;color:var(--sub);white-space:nowrap;}
   .meet b{font-size:17px;font-weight:700;color:var(--txt);margin-left:2px;}
-  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 8px;font-size:14px;}
+  .row3{display:grid;grid-template-columns:1fr 0.7fr 1fr 1fr;gap:2px 8px;font-size:14px;}
   .row3 .cell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .row3 .lb{display:block;color:var(--sub);font-size:11px;line-height:1.3;}
   .row3 .vl{font-weight:700;}
@@ -60,6 +64,10 @@
   <button class="refresh" id="btn" onclick="reload()">更新</button>
 </div>
 <div class="updated" id="updated"></div>
+<div class="tabs">
+  <div class="tab on" id="tabToday" onclick="switchDay('today')">本日</div>
+  <div class="tab" id="tabTomorrow" onclick="switchDay('tomorrow')">明日</div>
+</div>
 <div id="summary"></div>
 <div id="app"><div class="state">読み込み中…</div></div>
 
@@ -89,23 +97,23 @@
   function cardHTML(r){
     var isAlert = r.dispStatus.indexOf("要確認") >= 0;
 
-    // 上段右：現場 + 集合
-    var ev   = r.event ? '<span class="ev">'+esc(r.event)+'</span>' : '';
-    var meet = r.meetTime ? '<span class="meet">集合<b>'+esc(r.meetTime)+'</b></span>' : '';
+    // 上段右：現場のみ（集合は2行目の最右へ）
+    var ev = r.event ? '<span class="ev">'+esc(r.event)+'</span>' : '';
 
-    // 🚃/🚗 + 時刻（移動区分はアイコンで表現、ラベル省略）
+    // 🚃/🚗 + 時刻（移動区分はアイコンで表現）
     var moveIcon = "", moveTime = r.transportTime || "";
     if (r.transport.indexOf("電車") >= 0)      moveIcon = "🚃";
     else if (r.transport.indexOf("ピック") >= 0) moveIcon = "🚗";
     var moveCell = '<div class="cell"><span class="lb">'
       + (moveIcon || "移動") + '</span><span class="vl">'
-      + (moveTime ? esc(moveTime) : (moveIcon ? "" : esc(r.transport||"-"))) + '</span></div>';
+      + (moveTime ? esc(moveTime) : (moveIcon ? "—" : esc(r.transport||"-"))) + '</span></div>';
 
-    // 2行目：自宅出発 / 🚃or🚗時刻 / 到着予定（3カラム）
+    // 2行目：自宅出発 / 🚃🚗 / 到着予定 / 集合（4カラム）
     var row3 = '<div class="row3">'
       + '<div class="cell"><span class="lb">自宅出発</span><span class="vl">'+esc(r.departTime||"-")+'</span></div>'
       + moveCell
       + '<div class="cell"><span class="lb">到着予定</span><span class="vl">'+esc(r.arriveTime||"-")+'</span></div>'
+      + '<div class="cell"><span class="lb">集合</span><span class="vl">'+esc(r.meetTime||"-")+'</span></div>'
       + '</div>';
 
     // 3行目：要確認のときだけ最終出発リミット
@@ -116,7 +124,7 @@
       + '<div class="top">'
       +   '<span class="pill '+pillClass(r.dispStatus)+'">'+esc(r.dispStatus)+'</span>'
       +   '<span class="nm">'+esc(r.name||"（担当者未設定）")+'</span>'
-      +   ev + meet
+      +   ev
       + '</div>'
       + row3
       + limit
@@ -138,9 +146,10 @@
   }
 
   function render(data){
-    var t = data.today || "";
+    var t = data.date || data.today || "";
     var m = t.match(/^\d{4}-(\d{2})-(\d{2})$/);
     var mmdd = m ? (Number(m[1])+"月"+Number(m[2])+"日") : "";
+    var dayWord = (CURRENT_DAY === 'tomorrow') ? "明日" : "本日";
     document.getElementById("title").textContent = (mmdd?mmdd+" ":"") + "出発状況";
 
     var now = new Date();
@@ -151,16 +160,28 @@
     var recs = data.records || [];
     document.getElementById("summary").innerHTML = recs.length ? summaryHTML(recs) : "";
     if(recs.length === 0){
-      app.innerHTML = '<div class="state">本日の予定はまだありません。</div>';
+      app.innerHTML = '<div class="state">'+dayWord+'の予定はまだありません。</div>';
       return;
     }
     app.innerHTML = recs.map(cardHTML).join("");
   }
 
+  var CURRENT_DAY = 'today';
+
+  function switchDay(which){
+    if(CURRENT_DAY === which) return;
+    CURRENT_DAY = which;
+    document.getElementById('tabToday').className    = 'tab' + (which==='today'    ? ' on' : '');
+    document.getElementById('tabTomorrow').className = 'tab' + (which==='tomorrow' ? ' on' : '');
+    app.innerHTML = '<div class="state">読み込み中…</div>';
+    document.getElementById('summary').innerHTML = '';
+    reload();
+  }
+
   function reload(){
     var btn = document.getElementById("btn");
     btn.textContent = "更新中…"; btn.disabled = true;
-    fetch(GAS_URL + "?mode=admin", { method:"GET", redirect:"follow" })
+    fetch(GAS_URL + "?mode=admin&date=" + CURRENT_DAY, { method:"GET", redirect:"follow" })
       .then(function(res){ return res.json(); })
       .then(function(data){
         if(data.status !== "ok"){
